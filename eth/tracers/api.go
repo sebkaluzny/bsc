@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -992,9 +993,9 @@ func (api *API) TraceCallBundle(ctx context.Context, args TraceCallBundleArgs, b
 
 			statedb.Prepare(tx.Hash(), i)
 			vmenv := vm.NewEVM(vmctx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
-			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(math.MaxUint64)); err != nil {
 				//failed = err
-				break
+				return nil, err
 			}
 			statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 		}
