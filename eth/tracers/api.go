@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/math"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -983,7 +982,35 @@ func (api *API) TraceCallBundle(ctx context.Context, args TraceCallBundleArgs, b
 					"error": fmt.Sprintf("%s", err),
 				}
 				bundleResults = append(bundleResults, jsonResult)
-			} else {
+			}
+			//if err != nil {
+			//	jsonResult := map[string]interface{}{
+			//		"id":    bundle.Txs[i].Id,
+			//		"error": fmt.Sprintf("%s", err),
+			//	}
+			//	bundleResults = append(bundleResults, jsonResult)
+			//} else {
+			//	jsonResult := map[string]interface{}{
+			//		"id":     bundle.Txs[i].Id,
+			//		"result": traceRes,
+			//	}
+			//	bundleResults = append(bundleResults, jsonResult)
+			//}
+
+			statedb.Prepare(tx.Hash(), i)
+			vmenv := vm.NewEVM(vmctx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
+			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+				//failed = err
+				//return nil, err
+
+				jsonResult := map[string]interface{}{
+					"id":    bundle.Txs[i].Id,
+					"error": fmt.Sprintf("%s", err),
+				}
+				bundleResults = append(bundleResults, jsonResult)
+			}
+
+			if err == nil {
 				jsonResult := map[string]interface{}{
 					"id":     bundle.Txs[i].Id,
 					"result": traceRes,
@@ -991,17 +1018,6 @@ func (api *API) TraceCallBundle(ctx context.Context, args TraceCallBundleArgs, b
 				bundleResults = append(bundleResults, jsonResult)
 			}
 
-			statedb.Prepare(tx.Hash(), i)
-			vmenv := vm.NewEVM(vmctx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
-			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(math.MaxUint64)); err != nil {
-				//failed = err
-				//return nil, err
-				jsonResult := map[string]interface{}{
-					"id":    bundle.Txs[i].Id,
-					"error": fmt.Sprintf("%s", err),
-				}
-				bundleResults = append(bundleResults, jsonResult)
-			}
 			statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 		}
 
