@@ -995,7 +995,12 @@ func (api *API) TraceCallBundle(ctx context.Context, args TraceCallBundleArgs, b
 			vmenv := vm.NewEVM(vmctx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(math.MaxUint64)); err != nil {
 				//failed = err
-				return nil, err
+				//return nil, err
+				jsonResult := map[string]interface{}{
+					"id":    bundle.Txs[i].Id,
+					"error": fmt.Sprintf("%s", err),
+				}
+				bundleResults = append(bundleResults, jsonResult)
 			}
 			statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 		}
