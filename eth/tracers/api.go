@@ -1173,7 +1173,6 @@ func (api *API) TraceCallBundle(ctx context.Context, args TraceCallBundleArgs, b
 	is158 := api.backend.ChainConfig().IsEIP158(block.Number())
 	emptyAddress := common.Address{}
 
-
 	for _, bundle := range args.Bundles {
 		header := block.Header()
 		if bundle.BlockNumber != 0 {
@@ -1225,7 +1224,7 @@ func (api *API) TraceCallBundle(ctx context.Context, args TraceCallBundleArgs, b
 			//	TxIndex:     i,
 			//	TxHash:      tx.Hash(),
 			//}
-			res, err := api.traceTx(ctx, msg, &Context{}, vmctx, statedb, traceConfig)
+			res, err := api.traceTx(ctx, msg, &Context{}, vmctx, statedb, traceConfig, false)
 			if err != nil {
 				jsonResult := map[string]interface{}{
 					"id":    bundle.Txs[i].Id,
