@@ -68,14 +68,14 @@ var stateFreezerNoSnappy = map[string]bool{
 
 // The list of identifiers of ancient stores.
 var (
-	ChainFreezerName = "chain" // the folder name of chain segment ancient store.
-	StateFreezerName = "state" // the folder name of reverse diff ancient store.
+	chainFreezerName = "chain" // the folder name of chain segment ancient store.
+	stateFreezerName = "state" // the folder name of reverse diff ancient store.
 )
 
 // freezers the collections of all builtin freezers.
-var freezers = []string{ChainFreezerName, StateFreezerName}
+var freezers = []string{chainFreezerName, stateFreezerName}
 
 // NewStateFreezer initializes the freezer for state history.
 func NewStateFreezer(ancientDir string, readOnly bool, offset uint64) (*ResettableFreezer, error) {
-	return NewResettableFreezer(filepath.Join(ancientDir, StateFreezerName), "eth/db/state", readOnly, offset, stateHistoryTableSize, stateFreezerNoSnappy)
+	return NewResettableFreezer(filepath.Join(ancientDir, stateFreezerName), "eth/db/state", readOnly, offset, stateHistoryTableSize, stateFreezerNoSnappy)
 }

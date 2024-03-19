@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is a command-line client for Ethereum.
+// geth is the official command-line client for Ethereum.
 package main
 
 import (
@@ -61,7 +61,7 @@ var (
 		utils.MinFreeDiskSpaceFlag,
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,
-		utils.NoUSBFlag, // deprecated
+		utils.NoUSBFlag,
 		utils.DirectBroadcastFlag,
 		utils.DisableSnapProtocolFlag,
 		utils.EnableTrustProtocolFlag,
@@ -69,12 +69,8 @@ var (
 		utils.RangeLimitFlag,
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.RialtoHash,
-		utils.OverrideShanghai,
-		utils.OverrideKepler,
 		utils.OverrideCancun,
 		utils.OverrideVerkle,
-		utils.OverrideFeynman,
 		utils.EnablePersonal,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
@@ -93,33 +89,33 @@ var (
 		utils.BlobPoolPriceBumpFlag,
 		utils.SyncModeFlag,
 		utils.TriesVerifyModeFlag,
-		// utils.SyncTargetFlag,
+		utils.SyncTargetFlag,
 		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
 		utils.SnapshotFlag,
-		utils.TxLookupLimitFlag, // deprecated
+		utils.TxLookupLimitFlag,
 		utils.TransactionHistoryFlag,
+		utils.StateSchemeFlag,
 		utils.StateHistoryFlag,
 		utils.PathDBSyncFlag,
-		utils.LightServeFlag,       // deprecated
-		utils.LightIngressFlag,     // deprecated
-		utils.LightEgressFlag,      // deprecated
-		utils.LightMaxPeersFlag,    // deprecated
-		utils.LightNoPruneFlag,     // deprecated
-		utils.LightKDFFlag,         // deprecated
-		utils.LightNoSyncServeFlag, // deprecated
+		utils.LightServeFlag,
+		utils.LightIngressFlag,
+		utils.LightEgressFlag,
+		utils.LightMaxPeersFlag,
+		utils.LightNoPruneFlag,
+		utils.LightKDFFlag,
+		utils.LightNoSyncServeFlag,
 		utils.EthRequiredBlocksFlag,
-		utils.LegacyWhitelistFlag, // deprecated
+		utils.LegacyWhitelistFlag,
 		utils.BloomFilterSizeFlag,
 		utils.TriesInMemoryFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
 		utils.CacheTrieFlag,
-		utils.CacheTrieJournalFlag,   // deprecated
-		utils.CacheTrieRejournalFlag, // deprecated
+		utils.CacheTrieJournalFlag,
+		utils.CacheTrieRejournalFlag,
 		utils.CacheGCFlag,
 		utils.CacheSnapshotFlag,
-		// utils.CacheNoPrefetchFlag,
 		utils.CachePreimagesFlag,
 		utils.PersistDiffFlag,
 		utils.DiffBlockFlag,
@@ -139,12 +135,12 @@ var (
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerDelayLeftoverFlag,
-		// utils.MinerNewPayloadTimeout,
+		utils.MinerNewPayloadTimeout,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV4Flag,
 		utils.DiscoveryV5Flag,
-		utils.LegacyDiscoveryV5Flag, // deprecated
+		utils.LegacyDiscoveryV5Flag,
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
@@ -170,19 +166,17 @@ var (
 		utils.BLSPasswordFileFlag,
 		utils.BLSWalletDirFlag,
 		utils.VoteJournalDirFlag,
-		utils.LogDebugFlag,
-		utils.LogBacktraceAtFlag,
-	}, utils.NetworkFlags, utils.DatabaseFlags)
+	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
 		utils.HTTPListenAddrFlag,
 		utils.HTTPPortFlag,
 		utils.HTTPCORSDomainFlag,
-		// utils.AuthListenFlag,
-		// utils.AuthPortFlag,
-		// utils.AuthVirtualHostsFlag,
-		// utils.JWTSecretFlag,
+		utils.AuthListenFlag,
+		utils.AuthPortFlag,
+		utils.AuthVirtualHostsFlag,
+		utils.JWTSecretFlag,
 		utils.HTTPVirtualHostsFlag,
 		utils.GraphQLEnabledFlag,
 		utils.GraphQLCORSDomainFlag,
@@ -229,19 +223,18 @@ var app = flags.NewApp("the go-ethereum command line interface")
 func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
+	app.Copyright = "Copyright 2013-2023 The go-ethereum Authors and BSC Authors"
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
 		initCommand,
 		initNetworkCommand,
 		importCommand,
 		exportCommand,
-		importHistoryCommand,
-		exportHistoryCommand,
 		importPreimagesCommand,
+		exportPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
 		dumpGenesisCommand,
-		dumpRootHashCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -265,9 +258,6 @@ func init() {
 		// See verkle.go
 		verkleCommand,
 	}
-	if logTestCommand != nil {
-		app.Commands = append(app.Commands, logTestCommand)
-	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Flags = flags.Merge(
@@ -277,16 +267,11 @@ func init() {
 		debug.Flags,
 		metricsFlags,
 	)
-	flags.AutoEnvVars(app.Flags, "GETH")
 
 	app.Before = func(ctx *cli.Context) error {
 		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
 		flags.MigrateGlobalFlags(ctx)
-		if err := debug.Setup(ctx); err != nil {
-			return err
-		}
-		flags.CheckEnvVars(ctx, app.Flags, "GETH")
-		return nil
+		return debug.Setup(ctx)
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
@@ -307,9 +292,6 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.IsSet(utils.ChapelFlag.Name):
-		log.Info("Starting BSC on Chapel testnet...")
-
 	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 		log.Warn(`You are running Geth in --dev mode. Please note the following:
@@ -332,14 +314,18 @@ func prepare(ctx *cli.Context) {
 		log.Info("Starting Geth on BSC mainnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
-	if !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
+	if ctx.String(utils.SyncModeFlag.Name) != "light" && !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if !ctx.IsSet(utils.DeveloperFlag.Name) &&
-			!ctx.IsSet(utils.ChapelFlag.Name) {
+		if !ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)
 			ctx.Set(utils.CacheFlag.Name, strconv.Itoa(4096))
 		}
+	}
+	// If we're running a light client on any network, drop the cache to some meaningfully low amount
+	if ctx.String(utils.SyncModeFlag.Name) == "light" && !ctx.IsSet(utils.CacheFlag.Name) {
+		log.Info("Dropping default light client cache", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 128)
+		ctx.Set(utils.CacheFlag.Name, strconv.Itoa(128))
 	}
 }
 

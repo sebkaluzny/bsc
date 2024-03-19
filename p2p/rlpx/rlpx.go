@@ -664,7 +664,7 @@ func exportPubkey(pub *ecies.PublicKey) []byte {
 	if pub == nil {
 		panic("nil pubkey")
 	}
-	return elliptic.Marshal(pub.Curve, pub.X, pub.Y)[1:] //nolint:all //TODO
+	return elliptic.Marshal(pub.Curve, pub.X, pub.Y)[1:]
 }
 
 func xor(one, other []byte) (xor []byte) {

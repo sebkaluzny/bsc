@@ -54,11 +54,10 @@ func main() {
 	)
 	flag.Parse()
 
-	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
-	slogVerbosity := log.FromLegacyLevel(*verbosity)
-	glogger.Verbosity(slogVerbosity)
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+	glogger.Verbosity(log.Lvl(*verbosity))
 	glogger.Vmodule(*vmodule)
-	log.SetDefault(log.NewLogger(glogger))
+	log.Root().SetHandler(glogger)
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {

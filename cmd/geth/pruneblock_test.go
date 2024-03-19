@@ -38,11 +38,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -51,7 +50,7 @@ var (
 	key, _                      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	address                     = crypto.PubkeyToAddress(key.PublicKey)
 	balance                     = big.NewInt(100000000000000000)
-	gspec                       = &core.Genesis{Config: params.TestChainConfig, Alloc: types.GenesisAlloc{address: {Balance: balance}}, BaseFee: big.NewInt(params.InitialBaseFee)}
+	gspec                       = &core.Genesis{Config: params.TestChainConfig, Alloc: core.GenesisAlloc{address: {Balance: balance}}, BaseFee: big.NewInt(params.InitialBaseFee)}
 	signer                      = types.LatestSigner(gspec.Config)
 	config                      = &core.CacheConfig{
 		TrieCleanLimit: 256,
@@ -68,19 +67,6 @@ func TestOfflineBlockPrune(t *testing.T) {
 	testOfflineBlockPruneWithAmountReserved(t, 0)
 	//General case.
 	testOfflineBlockPruneWithAmountReserved(t, 100)
-}
-
-func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData bool) (ethdb.Database, error) {
-	kvdb, err := leveldb.New(file, cache, handles, namespace, readonly)
-	if err != nil {
-		return nil, err
-	}
-	frdb, err := rawdb.NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly, disableFreeze, isLastOffset, pruneAncientData)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
-	}
-	return frdb, nil
 }
 
 func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64) {
@@ -100,7 +86,7 @@ func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64
 		t.Fatalf("Failed to back up block: %v", err)
 	}
 
-	dbBack, err := NewLevelDBDatabaseWithFreezer(chaindbPath, 0, 0, newAncientPath, "", false, true, false, false)
+	dbBack, err := rawdb.NewLevelDBDatabaseWithFreezer(chaindbPath, 0, 0, newAncientPath, "", false, true, false, false)
 	if err != nil {
 		t.Fatalf("failed to create database with ancient backend")
 	}
@@ -146,13 +132,13 @@ func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64
 
 func BlockchainCreator(t *testing.T, chaindbPath, AncientPath string, blockRemain uint64) (ethdb.Database, []*types.Block, []*types.Block, []types.Receipts, []*big.Int, uint64, *core.BlockChain) {
 	//create a database with ancient freezer
-	db, err := NewLevelDBDatabaseWithFreezer(chaindbPath, 0, 0, AncientPath, "", false, false, false, false)
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(chaindbPath, 0, 0, AncientPath, "", false, false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create database with ancient backend")
 	}
 	defer db.Close()
 
-	triedb := triedb.NewDatabase(db, nil)
+	triedb := trie.NewDatabase(db, nil)
 	defer triedb.Close()
 
 	genesis := gspec.MustCommit(db, triedb)

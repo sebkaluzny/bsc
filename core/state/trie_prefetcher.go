@@ -53,7 +53,7 @@ type triePrefetcher struct {
 	db         Database               // Database to fetch trie nodes through
 	root       common.Hash            // Root hash of the account trie for metrics
 	rootParent common.Hash            // Root has of the account trie from block before the prvious one, designed for pipecommit mode
-	fetches    map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies
+	fetches    map[string]Trie        // Partially or fully fetcher tries
 	fetchers   map[string]*subfetcher // Subfetchers for each trie
 
 	abortChan         chan *subfetcher // to abort a single subfetcher and its children
@@ -339,10 +339,7 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	trieID := make([]byte, common.HashLength*2)
-	copy(trieID, owner.Bytes())
-	copy(trieID[common.HashLength:], root.Bytes())
-	return string(trieID)
+	return string(append(owner.Bytes(), root.Bytes()...))
 }
 
 // subfetcher is a trie fetcher goroutine responsible for pulling entries for a
@@ -486,7 +483,7 @@ func (sf *subfetcher) loop() {
 	if sf.owner == (common.Hash{}) {
 		trie, err = sf.db.OpenTrie(sf.root)
 	} else {
-		trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
+		trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root)
 	}
 	if err != nil {
 		log.Debug("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
@@ -504,7 +501,7 @@ func (sf *subfetcher) loop() {
 					sf.trie, err = sf.db.OpenTrie(sf.root)
 				} else {
 					// address is useless
-					sf.trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
+					sf.trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root)
 				}
 				if err != nil {
 					continue

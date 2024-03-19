@@ -109,11 +109,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, offset uint64, 
 	// Leveldb uses LOCK as the filelock filename. To prevent the
 	// name collision, we use FLOCK as the lock name.
 	lock := flock.New(flockFile)
-	tryLock := lock.TryLock
-	if readonly {
-		tryLock = lock.TryRLock
-	}
-	if locked, err := tryLock(); err != nil {
+	if locked, err := lock.TryLock(); err != nil {
 		return nil, err
 	} else if !locked {
 		return nil, errors.New("locking failed")
@@ -156,7 +152,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, offset uint64, 
 	}
 
 	// Some blocks in ancientDB may have already been frozen and been pruned, so adding the offset to
-	// represent the absolute number of blocks already frozen.
+	// reprensent the absolute number of blocks already frozen.
 	freezer.frozen.Add(offset)
 	freezer.tail.Add(offset)
 

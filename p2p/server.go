@@ -65,16 +65,15 @@ const (
 
 	// Maximum amount of time allowed for writing a complete message.
 	frameWriteTimeout = 20 * time.Second
+
+	// Maximum time to wait before stop the p2p server
+	stopTimeout = 5 * time.Second
 )
 
 var (
 	errServerStopped       = errors.New("server stopped")
 	errEncHandshakeError   = errors.New("rlpx enc error")
 	errProtoHandshakeError = errors.New("rlpx proto error")
-
-	// magicEnodeID is a special enode ID that can be used to disconnect all peers
-	// enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439
-	magicEnodeID = enode.ID{52, 49, 195, 147, 158, 30, 226, 166, 52, 94, 151, 106, 130, 52, 249, 135, 1, 82, 214, 72, 121, 243, 11, 194, 114, 160, 116, 246, 133, 158, 117, 232}
 )
 
 // Config holds Server options.
@@ -170,7 +169,7 @@ type Config struct {
 	// is used to dial outbound peer connections.
 	Dialer NodeDialer `toml:"-"`
 
-	// If NoDial is true, the server will not dial any peers, except for pre-configured static nodes.
+	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
 
 	// If EnableMsgEvents is set then the server will emit PeerEvents
@@ -226,8 +225,7 @@ type Server struct {
 	checkpointAddPeer       chan *conn
 
 	// State of run loop and listenLoop.
-	inboundHistory     expHeap
-	disconnectEnodeSet map[enode.ID]struct{}
+	inboundHistory expHeap
 }
 
 type peerOpFunc func(map[enode.ID]*Peer)
@@ -368,16 +366,8 @@ func (srv *Server) RemovePeer(node *enode.Node) {
 		ch  chan *PeerEvent
 		sub event.Subscription
 	)
-
 	// Disconnect the peer on the main loop.
 	srv.doPeerOp(func(peers map[enode.ID]*Peer) {
-		// Special case: sending a disconnect request with a hardcoded enode ID will reset the disconnect enode set
-		if node.ID() == magicEnodeID {
-			srv.disconnectEnodeSet = make(map[enode.ID]struct{})
-			srv.log.Debug("Reset disconnect enode set")
-			return
-		}
-
 		srv.dialsched.removeStatic(node)
 		if peer := peers[node.ID()]; peer != nil {
 			ch = make(chan *PeerEvent, 1)
@@ -454,7 +444,7 @@ func (srv *Server) Stop() {
 
 	select {
 	case <-stopChan:
-	case <-time.After(defaultDialTimeout): // we should use defaultDialTimeout as we can dial just before the shutdown
+	case <-time.After(stopTimeout):
 		srv.log.Warn("stop p2p server timeout, forcing stop")
 	}
 }
@@ -523,7 +513,6 @@ func (srv *Server) Start() (err error) {
 	srv.removetrusted = make(chan *enode.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
-	srv.disconnectEnodeSet = make(map[enode.ID]struct{})
 
 	if err := srv.setupLocalNode(); err != nil {
 		return err
@@ -685,10 +674,7 @@ func (srv *Server) SetFilter(f forkid.Filter) {
 }
 
 func (srv *Server) maxDialedConns() (limit int) {
-	if srv.NoDial {
-		return len(srv.StaticNodes) + len(srv.VerifyNodes)
-	}
-	if srv.MaxPeers == 0 {
+	if srv.NoDial || srv.MaxPeers == 0 {
 		return 0
 	}
 	if srv.DialRatio == 0 {
@@ -850,9 +836,6 @@ running:
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
-			if !pd.requested && pd.err == DiscRequested {
-				srv.disconnectEnodeSet[pd.ID()] = struct{}{}
-			}
 			delete(peers, pd.ID())
 			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
@@ -906,11 +889,6 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
 	}
-
-	if _, ok := srv.disconnectEnodeSet[c.node.ID()]; ok {
-		return errors.New("explicitly disconnected peer previously")
-	}
-
 	// Repeat the post-handshake checks because the
 	// peer set might have changed since those checks were performed.
 	return srv.postHandshakeChecks(peers, inboundCount, c)
@@ -989,16 +967,15 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	if remoteIP == nil {
 		return nil
 	}
-
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
-		return errors.New("not in netrestrict list")
+		return fmt.Errorf("not in netrestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()
 	srv.inboundHistory.expire(now, nil)
 	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
-		return errors.New("too many attempts")
+		return fmt.Errorf("too many attempts")
 	}
 	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
 	return nil
@@ -1026,8 +1003,6 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	if err != nil {
 		if !c.is(inboundConn) {
 			markDialError(err)
-		} else {
-			markServeError(err)
 		}
 		c.close(err)
 	}

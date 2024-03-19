@@ -94,18 +94,6 @@ func (db *Database) SetDiffStore(diff ethdb.KeyValueStore) {
 	panic("not supported")
 }
 
-func (db *Database) StateStore() ethdb.Database {
-	panic("not supported")
-}
-
-func (db *Database) SetStateStore(state ethdb.Database) {
-	panic("not supported")
-}
-
-func (db *Database) StateStoreReader() ethdb.Reader {
-	return db
-}
-
 func (db *Database) ReadAncients(fn func(op ethdb.AncientReaderOp) error) (err error) {
 	return fn(db)
 }

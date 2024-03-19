@@ -30,7 +30,6 @@ import (
 // TestEthProtocolNegotiation tests whether the test suite
 // can negotiate the highest eth protocol in a status message exchange
 func TestEthProtocolNegotiation(t *testing.T) {
-	t.Parallel()
 	var tests = []struct {
 		conn     *Conn
 		caps     []p2p.Cap
@@ -123,27 +122,30 @@ func TestEthProtocolNegotiation(t *testing.T) {
 	}
 }
 
-// TestChainGetHeaders tests whether the test suite can correctly
+// TestChain_GetHeaders tests whether the test suite can correctly
 // respond to a GetBlockHeaders request from a node.
-func TestChainGetHeaders(t *testing.T) {
-	t.Parallel()
-
-	dir, err := filepath.Abs("./testdata")
+func TestChain_GetHeaders(t *testing.T) {
+	chainFile, err := filepath.Abs("./testdata/chain.rlp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, err := NewChain(dir)
+	genesisFile, err := filepath.Abs("./testdata/genesis.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chain, err := loadChain(chainFile, genesisFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var tests = []struct {
-		req      eth.GetBlockHeadersPacket
+		req      GetBlockHeaders
 		expected []*types.Header
 	}{
 		{
-			req: eth.GetBlockHeadersPacket{
-				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			req: GetBlockHeaders{
+				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 					Origin:  eth.HashOrNumber{Number: uint64(2)},
 					Amount:  uint64(5),
 					Skip:    1,
@@ -159,8 +161,8 @@ func TestChainGetHeaders(t *testing.T) {
 			},
 		},
 		{
-			req: eth.GetBlockHeadersPacket{
-				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			req: GetBlockHeaders{
+				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 					Origin:  eth.HashOrNumber{Number: uint64(chain.Len() - 1)},
 					Amount:  uint64(3),
 					Skip:    0,
@@ -174,8 +176,8 @@ func TestChainGetHeaders(t *testing.T) {
 			},
 		},
 		{
-			req: eth.GetBlockHeadersPacket{
-				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			req: GetBlockHeaders{
+				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 					Origin:  eth.HashOrNumber{Hash: chain.Head().Hash()},
 					Amount:  uint64(1),
 					Skip:    0,

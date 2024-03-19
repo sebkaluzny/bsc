@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -45,7 +44,7 @@ func (h *trustHandler) Handle(peer *trust.Peer, packet trust.Packet) error {
 			vm.HandleRootResponse(verifyResult, peer.ID())
 			return nil
 		}
-		return errors.New("verify manager is nil which is unexpected")
+		return fmt.Errorf("verify manager is nil which is unexpected")
 
 	default:
 		return fmt.Errorf("unexpected trust packet type: %T", packet)

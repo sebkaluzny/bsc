@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Test chain parameters.
@@ -41,10 +41,10 @@ var (
 
 	testGspec = &core.Genesis{
 		Config:  params.TestChainConfig,
-		Alloc:   types.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	testGenesis = testGspec.MustCommit(testDB, triedb.NewDatabase(testDB, triedb.HashDefaults))
+	testGenesis = testGspec.MustCommit(testDB, trie.NewDatabase(testDB, trie.HashDefaults))
 )
 
 // The common prefix of all test chains:

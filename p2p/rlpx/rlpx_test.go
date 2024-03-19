@@ -421,7 +421,7 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 	conn2.SetSnappy(true)
 	if err := <-handshakeDone; err != nil {
-		b.Fatal("server handshake error:", err)
+		b.Fatal("server hanshake error:", err)
 	}
 
 	// Read N messages.

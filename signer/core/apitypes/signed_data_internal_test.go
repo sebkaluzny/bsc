@@ -27,7 +27,6 @@ import (
 )
 
 func TestBytesPadding(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		Type   string
 		Input  []byte
@@ -88,7 +87,6 @@ func TestBytesPadding(t *testing.T) {
 }
 
 func TestParseAddress(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		Input  interface{}
 		Output []byte // nil => error
@@ -138,7 +136,6 @@ func TestParseAddress(t *testing.T) {
 }
 
 func TestParseBytes(t *testing.T) {
-	t.Parallel()
 	for i, tt := range []struct {
 		v   interface{}
 		exp []byte
@@ -173,7 +170,6 @@ func TestParseBytes(t *testing.T) {
 }
 
 func TestParseInteger(t *testing.T) {
-	t.Parallel()
 	for i, tt := range []struct {
 		t   string
 		v   interface{}
@@ -204,7 +200,6 @@ func TestParseInteger(t *testing.T) {
 }
 
 func TestConvertStringDataToSlice(t *testing.T) {
-	t.Parallel()
 	slice := []string{"a", "b", "c"}
 	var it interface{} = slice
 	_, err := convertDataToSlice(it)
@@ -214,7 +209,6 @@ func TestConvertStringDataToSlice(t *testing.T) {
 }
 
 func TestConvertUint256DataToSlice(t *testing.T) {
-	t.Parallel()
 	slice := []*math.HexOrDecimal256{
 		math.NewHexOrDecimal256(1),
 		math.NewHexOrDecimal256(2),
@@ -228,7 +222,6 @@ func TestConvertUint256DataToSlice(t *testing.T) {
 }
 
 func TestConvertAddressDataToSlice(t *testing.T) {
-	t.Parallel()
 	slice := []common.Address{
 		common.HexToAddress("0x0000000000000000000000000000000000000001"),
 		common.HexToAddress("0x0000000000000000000000000000000000000002"),

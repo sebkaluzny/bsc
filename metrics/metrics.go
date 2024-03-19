@@ -9,9 +9,7 @@ import (
 	"os"
 	"runtime/metrics"
 	"runtime/pprof"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -32,35 +30,13 @@ var EnabledExpensive = false
 // enablerFlags is the CLI flag names to use to enable metrics collections.
 var enablerFlags = []string{"metrics"}
 
-// enablerEnvVars is the env var names to use to enable metrics collections.
-var enablerEnvVars = []string{"GETH_METRICS"}
-
 // expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
 var expensiveEnablerFlags = []string{"metrics.expensive"}
-
-// expensiveEnablerEnvVars is the env var names to use to enable metrics collections.
-var expensiveEnablerEnvVars = []string{"GETH_METRICS_EXPENSIVE"}
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
-	for _, enabler := range enablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !Enabled {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
-	}
-	for _, enabler := range expensiveEnablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !EnabledExpensive {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling expensive metrics collection")
-				EnabledExpensive = true
-			}
-		}
-	}
 	for _, arg := range os.Args {
 		flag := strings.TrimLeft(arg, "-")
 
@@ -107,12 +83,6 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/memory/classes/heap/unused:bytes"},
 	{Name: "/sched/goroutines:goroutines"},
 	{Name: "/sched/latencies:seconds"}, // histogram
-}
-
-func ReadRuntimeStats() *runtimeStats {
-	r := new(runtimeStats)
-	readRuntimeStats(r)
-	return r
 }
 
 func readRuntimeStats(v *runtimeStats) {
@@ -171,29 +141,27 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 	// Define the various metrics to collect
 	var (
-		cpuSysLoad              = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
-		cpuSysWait              = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
-		cpuProcLoad             = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
-		cpuSysLoadTotal         = GetOrRegisterCounterFloat64("system/cpu/sysload/total", DefaultRegistry)
-		cpuSysWaitTotal         = GetOrRegisterCounterFloat64("system/cpu/syswait/total", DefaultRegistry)
-		cpuProcLoadTotal        = GetOrRegisterCounterFloat64("system/cpu/procload/total", DefaultRegistry)
-		cpuThreads              = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
-		cpuGoroutines           = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
-		cpuSchedLatency         = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", secondsToNs, nil)
-		memPauses               = getOrRegisterRuntimeHistogram("system/memory/pauses", secondsToNs, nil)
-		memAllocs               = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
-		memFrees                = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
-		memTotal                = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
-		heapUsed                = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
-		heapObjects             = GetOrRegisterGauge("system/memory/objects", DefaultRegistry)
-		diskReads               = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
-		diskReadBytes           = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
-		diskReadBytesCounter    = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
-		diskWrites              = GetOrRegisterMeter("system/disk/writecount", DefaultRegistry)
-		diskWriteBytes          = GetOrRegisterMeter("system/disk/writedata", DefaultRegistry)
-		diskWriteBytesCounter   = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
-		diskIOReadBytesCounter  = GetOrRegisterCounter("system/disk/io/readbytes", DefaultRegistry)
-		diskIOWriteBytesCounter = GetOrRegisterCounter("system/disk/io/writebytes", DefaultRegistry)
+		cpuSysLoad            = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
+		cpuSysWait            = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
+		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
+		cpuSysLoadTotal       = GetOrRegisterCounterFloat64("system/cpu/sysload/total", DefaultRegistry)
+		cpuSysWaitTotal       = GetOrRegisterCounterFloat64("system/cpu/syswait/total", DefaultRegistry)
+		cpuProcLoadTotal      = GetOrRegisterCounterFloat64("system/cpu/procload/total", DefaultRegistry)
+		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
+		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
+		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", secondsToNs, nil)
+		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", secondsToNs, nil)
+		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
+		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
+		memTotal              = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
+		heapUsed              = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
+		heapObjects           = GetOrRegisterGauge("system/memory/objects", DefaultRegistry)
+		diskReads             = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
+		diskReadBytes         = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
+		diskReadBytesCounter  = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
+		diskWrites            = GetOrRegisterMeter("system/disk/writecount", DefaultRegistry)
+		diskWriteBytes        = GetOrRegisterMeter("system/disk/writedata", DefaultRegistry)
+		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	)
 
 	var lastCollectTime time.Time
@@ -245,8 +213,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 			diskWriteBytes.Mark(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
 			diskReadBytesCounter.Inc(diskstats[now].ReadBytes - diskstats[prev].ReadBytes)
 			diskWriteBytesCounter.Inc(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
-			diskIOReadBytesCounter.Inc(diskstats[now].ReadIOBytes - diskstats[prev].ReadIOBytes)
-			diskIOWriteBytesCounter.Inc(diskstats[now].WriteIOBytes - diskstats[prev].WriteIOBytes)
 		}
 
 		time.Sleep(refresh)

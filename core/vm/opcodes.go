@@ -25,7 +25,7 @@ type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
-	return PUSH0 <= op && op <= PUSH32
+	return PUSH1 <= op && op <= PUSH32
 }
 
 // 0x0 range - arithmetic ops.
@@ -101,7 +101,6 @@ const (
 	SELFBALANCE OpCode = 0x47
 	BASEFEE     OpCode = 0x48
 	BLOBHASH    OpCode = 0x49
-	BLOBBASEFEE OpCode = 0x4a
 )
 
 // 0x50 range - 'storage' and execution.
@@ -224,7 +223,8 @@ const (
 	SELFDESTRUCT OpCode = 0xff
 )
 
-var opCodeToString = [256]string{
+// Since the opcodes aren't all in order we can't use a regular slice.
+var opCodeToString = map[OpCode]string{
 	// 0x0 range - arithmetic ops.
 	STOP:       "STOP",
 	ADD:        "ADD",
@@ -287,7 +287,6 @@ var opCodeToString = [256]string{
 	SELFBALANCE: "SELFBALANCE",
 	BASEFEE:     "BASEFEE",
 	BLOBHASH:    "BLOBHASH",
-	BLOBBASEFEE: "BLOBBASEFEE",
 
 	// 0x50 range - 'storage' and execution.
 	POP:      "POP",
@@ -398,10 +397,12 @@ var opCodeToString = [256]string{
 }
 
 func (op OpCode) String() string {
-	if s := opCodeToString[op]; s != "" {
-		return s
+	str := opCodeToString[op]
+	if len(str) == 0 {
+		return fmt.Sprintf("opcode %#x not defined", int(op))
 	}
-	return fmt.Sprintf("opcode %#x not defined", int(op))
+
+	return str
 }
 
 var stringToOp = map[string]OpCode{
@@ -443,7 +444,6 @@ var stringToOp = map[string]OpCode{
 	"CHAINID":        CHAINID,
 	"BASEFEE":        BASEFEE,
 	"BLOBHASH":       BLOBHASH,
-	"BLOBBASEFEE":    BLOBBASEFEE,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
 	"CODESIZE":       CODESIZE,

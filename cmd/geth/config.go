@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"runtime"
-	"strings"
 	"unicode"
+
+	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -32,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -43,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
-	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -57,9 +54,8 @@ var (
 	}
 
 	configFileFlag = &cli.StringFlag{
-		Name:     "config",
-		Usage:    "TOML configuration file",
-		Category: flags.EthCategory,
+		Name:  "config",
+		Usage: "TOML configuration file",
 	}
 )
 
@@ -138,12 +134,8 @@ func loadBaseConfig(ctx *cli.Context) gethConfig {
 			utils.Fatalf("%v", err)
 		}
 	}
-
-	scheme := cfg.Eth.StateScheme
-	if scheme != "" {
-		if !rawdb.ValidateStateScheme(scheme) {
-			utils.Fatalf("Invalid state scheme param in config: %s", scheme)
-		}
+	if !utils.ValidateStateScheme(cfg.Eth.StateScheme) {
+		utils.Fatalf("invalid state scheme param in config: %s", cfg.Eth.StateScheme)
 	}
 	if cfg.Eth.Genesis != nil && cfg.Eth.Genesis.Config != nil {
 		log.Warn("Chain config in the configuration file is ignored!")
@@ -178,19 +170,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.IsSet(utils.RialtoHash.Name) {
-		v := ctx.String(utils.RialtoHash.Name)
-		params.RialtoGenesisHash = common.HexToHash(v)
-	}
-
-	if ctx.IsSet(utils.OverrideShanghai.Name) {
-		v := ctx.Uint64(utils.OverrideShanghai.Name)
-		cfg.Eth.OverrideShanghai = &v
-	}
-	if ctx.IsSet(utils.OverrideKepler.Name) {
-		v := ctx.Uint64(utils.OverrideKepler.Name)
-		cfg.Eth.OverrideKepler = &v
-	}
 	if ctx.IsSet(utils.OverrideCancun.Name) {
 		v := ctx.Uint64(utils.OverrideCancun.Name)
 		cfg.Eth.OverrideCancun = &v
@@ -199,28 +178,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		cfg.Eth.OverrideVerkle = &v
 	}
-	if ctx.IsSet(utils.OverrideFeynman.Name) {
-		v := ctx.Uint64(utils.OverrideFeynman.Name)
-		cfg.Eth.OverrideFeynman = &v
-	}
-	if ctx.IsSet(utils.SeparateDBFlag.Name) && !stack.IsSeparatedDB() {
-		utils.Fatalf("Failed to locate separate database subdirectory when separatedb parameter has been set")
-	}
-	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Create gauge with geth system and build information
-	if eth != nil { // The 'eth' backend may be nil in light mode
-		var protos []string
-		for _, p := range eth.Protocols() {
-			protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
-		}
-		metrics.NewRegisteredGaugeInfo("geth/info", nil).Update(metrics.GaugeInfoValue{
-			"arch":      runtime.GOARCH,
-			"os":        runtime.GOOS,
-			"version":   cfg.Node.Version,
-			"protocols": strings.Join(protos, ","),
-		})
-	}
+	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
@@ -229,6 +187,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}
+
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -47,9 +46,11 @@ func ParseEthFilter(chain string) (NodeFilterFunc, error) {
 	var filter forkid.Filter
 	switch chain {
 	case "bsc":
-		filter = forkid.NewStaticFilter(params.BSCChainConfig, core.DefaultBSCGenesisBlock().ToBlock())
+		filter = forkid.NewStaticFilter(params.BSCChainConfig, params.BSCGenesisHash)
 	case "chapel":
-		filter = forkid.NewStaticFilter(params.ChapelChainConfig, core.DefaultChapelGenesisBlock().ToBlock())
+		filter = forkid.NewStaticFilter(params.ChapelChainConfig, params.ChapelGenesisHash)
+	case "rialto":
+		filter = forkid.NewStaticFilter(params.RialtoChainConfig, params.RialtoGenesisHash)
 	default:
 		return nil, fmt.Errorf("unknown network %q", chain)
 	}

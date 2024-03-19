@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -74,23 +73,32 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
+func (p *testTxPool) Get(hash common.Hash) *txpool.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	return p.pool[hash]
+
+	if tx := p.pool[hash]; tx != nil {
+		return &txpool.Transaction{Tx: tx}
+	}
+	return nil
 }
 
 // Add appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *testTxPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
+	unwrapped := make([]*types.Transaction, len(txs))
+	for i, tx := range txs {
+		unwrapped[i] = tx.Tx
+	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	for _, tx := range txs {
+	for _, tx := range unwrapped {
 		p.pool[tx.Hash()] = tx
 	}
-	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
-	return make([]error, len(txs))
+
+	p.txFeed.Send(core.NewTxsEvent{Txs: unwrapped})
+	return make([]error, len(unwrapped))
 }
 
 // ReannouceTransactions announce the transactions to some peers.
@@ -106,7 +114,7 @@ func (p *testTxPool) ReannouceTransactions(txs []*types.Transaction) []error {
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -123,21 +131,19 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 		for _, tx := range batch {
 			pending[addr] = append(pending[addr], &txpool.LazyTransaction{
 				Hash:      tx.Hash(),
-				Tx:        tx,
+				Tx:        &txpool.Transaction{Tx: tx},
 				Time:      tx.Time(),
-				GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
-				GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
-				Gas:       tx.Gas(),
-				BlobGas:   tx.BlobGas(),
+				GasFeeCap: tx.GasFeeCap(),
+				GasTipCap: tx.GasTipCap(),
 			})
 		}
 	}
 	return pending
 }
 
-// SubscribeTransactions should return an event subscription of NewTxsEvent and
+// SubscribeNewTxsEvent should return an event subscription of NewTxsEvent and
 // send events to the given channel.
-func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return p.txFeed.Subscribe(ch)
 }
 
@@ -170,7 +176,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}
 	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 

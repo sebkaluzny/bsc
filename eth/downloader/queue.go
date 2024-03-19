@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -646,7 +645,7 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 	// as there's no order of events that should lead to such expirations.
 	req := pendPool[peer]
 	if req == nil {
-		log.Trace("Expired request does not exist", "peer", peer)
+		log.Error("Expired request does not exist", "peer", peer)
 		return 0
 	}
 	delete(pendPool, peer)
@@ -801,7 +800,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 			}
 		}
 		// Blocks must have a number of blobs corresponding to the header gas usage,
-		// and zero before the Cancun hardfork.
+		// and zero before the Cancun hardfork
 		var blobs int
 		for _, tx := range txLists[index] {
 			// Count the number of blobs to validate against the header's blobGasUsed
@@ -813,12 +812,9 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 					return errInvalidBody
 				}
 				for _, hash := range tx.BlobHashes() {
-					if !kzg4844.IsValidVersionedHash(hash[:]) {
+					if hash[0] != params.BlobTxHashVersion {
 						return errInvalidBody
 					}
-				}
-				if tx.BlobTxSidecar() != nil {
-					return errInvalidBody
 				}
 			}
 		}
