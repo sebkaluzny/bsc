@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 
+//go:build !gofuzz && cgo
+// +build !gofuzz,cgo
+
 package secp256k1
 
 import (
@@ -21,7 +24,7 @@ func generateKeyPair() (pubkey, privkey []byte) {
 	if err != nil {
 		panic(err)
 	}
-	pubkey = elliptic.Marshal(S256(), key.X, key.Y)
+	pubkey = elliptic.Marshal(S256(), key.X, key.Y) //nolint:all //TODO
 
 	privkey = make([]byte, 32)
 	blob := key.D.Bytes()

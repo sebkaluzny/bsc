@@ -5,7 +5,7 @@ The goal of BNB Smart Chain is to bring programmability and interoperability to 
 BNB Smart Chain starts its development based on go-ethereum fork. So you may see many toolings, binaries and also docs are based on Ethereum ones, such as the name “geth”.
 
 [![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
+https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
 )](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/z2VpC455eU)
 
@@ -61,7 +61,7 @@ Many of the below are the same as or similar to go-ethereum.
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/getting-started/installing-geth).
 
-Building `geth` requires both a Go (version 1.20 or later) and a C compiler (GCC 5 or higher). You can install
+Building `geth` requires both a Go (version 1.21 or later) and a C compiler (GCC 5 or higher). You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
 ```shell
@@ -149,15 +149,8 @@ unzip testnet.zip
 #### 3. Download snapshot
 Download latest chaindata snapshot from [here](https://github.com/bnb-chain/bsc-snapshots). Follow the guide to structure your files.
 
-Note: if you can not download the chaindata snapshot and want to sync from genesis, you have to generate the genesis block first, you have already get the genesis.json in Step 2.
-So just run: 
-``` shell
-## It will init genesis with Hash-Base Storage Scheme by default.
-geth --datadir <datadir> init ./genesis.json
+Note: If you encounter difficulties downloading the chaindata snapshot and prefer to synchronize from the genesis block on the Chapel testnet, remember to include the additional flag `--chapel` when initially launching Geth.
 
-## It will init genesis with Path-Base Storage Scheme.
-geth --datadir <datadir> --state.scheme path init ./genesis.json
-```
 #### 4. Start a full node
 ```shell
 ./geth --config ./config.toml --datadir ./node  --cache 8000 --rpc.allow-unprotected-txs --history.transactions 0

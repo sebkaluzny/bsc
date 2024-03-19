@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -72,6 +71,8 @@ type Database struct {
 	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 	manualMemAllocGauge metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
 
+	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
+
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 	closed   bool            // keep track of whether we're Closed
@@ -86,6 +87,8 @@ type Database struct {
 	writeDelayStartTime time.Time     // The start time of the latest write stall
 	writeDelayCount     atomic.Int64  // Total number of write stall counts
 	writeDelayTime      atomic.Int64  // Total time spent in write stalls
+
+	writeOptions *pebble.WriteOptions
 }
 
 func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
@@ -119,18 +122,23 @@ func (d *Database) onWriteStallEnd() {
 }
 
 // panicLogger is just a noop logger to disable Pebble's internal logger.
+//
+// TODO(karalabe): Remove when Pebble sets this as the default.
 type panicLogger struct{}
 
 func (l panicLogger) Infof(format string, args ...interface{}) {
 }
 
+func (l panicLogger) Errorf(format string, args ...interface{}) {
+}
+
 func (l panicLogger) Fatalf(format string, args ...interface{}) {
-	panic(errors.Errorf("fatal: "+format, args...))
+	panic(fmt.Errorf("fatal: "+format, args...))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool) (*Database, error) {
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -156,17 +164,25 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// including a frozen memory table and another live one.
 	memTableLimit := 2
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
-	if memTableSize > maxMemTableSize {
-		memTableSize = maxMemTableSize
+
+	// The memory table size is currently capped at maxMemTableSize-1 due to a
+	// known bug in the pebble where maxMemTableSize is not recognized as a
+	// valid size.
+	//
+	// TODO use the maxMemTableSize as the maximum table size once the issue
+	// in pebble is fixed.
+	if memTableSize >= maxMemTableSize {
+		memTableSize = maxMemTableSize - 1
 	}
 
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024),
 		"handles", handles, "memory table", common.StorageSize(memTableSize))
 
 	db := &Database{
-		fn:       file,
-		log:      logger,
-		quitChan: make(chan chan error),
+		fn:           file,
+		log:          logger,
+		quitChan:     make(chan chan error),
+		writeOptions: &pebble.WriteOptions{Sync: !ephemeral},
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -241,7 +257,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
 	// Start up the metrics gathering and return
-	go db.meter(metricsGatheringInterval)
+	go db.meter(metricsGatheringInterval, namespace)
 	return db, nil
 }
 
@@ -307,7 +323,7 @@ func (d *Database) Put(key []byte, value []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
-	return d.db.Set(key, value, pebble.Sync)
+	return d.db.Set(key, value, d.writeOptions)
 }
 
 // Delete removes the key from the key-value store.
@@ -330,9 +346,6 @@ func (d *Database) NewBatch() ethdb.Batch {
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
-// It's not supported by pebble, but pebble has better memory allocation strategy
-// which turns out a lot faster than leveldb. It's performant enough to construct
-// batch object without any pre-allocated space.
 func (d *Database) NewBatchWithSize(size int) ethdb.Batch {
 	return &batch{
 		b:  d.db.NewBatchWithSize(size),
@@ -404,9 +417,12 @@ func upperBound(prefix []byte) (limit []byte) {
 	return limit
 }
 
-// Stat returns a particular internal stat of the database.
+// Stat returns the internal metrics of Pebble in a text format. It's a developer
+// method to read everything there is to read independent of Pebble version.
+//
+// The property is unused in Pebble as there's only one thing to retrieve.
 func (d *Database) Stat(property string) (string, error) {
-	return "", nil
+	return d.db.Metrics().String(), nil
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
@@ -438,7 +454,7 @@ func (d *Database) Path() string {
 
 // meter periodically retrieves internal pebble counters and reports them to
 // the metrics subsystem.
-func (d *Database) meter(refresh time.Duration) {
+func (d *Database) meter(refresh time.Duration, namespace string) {
 	var errc chan error
 	timer := time.NewTimer(refresh)
 	defer timer.Stop()
@@ -461,7 +477,7 @@ func (d *Database) meter(refresh time.Duration) {
 			compRead  int64
 			nWrite    int64
 
-			metrics            = d.db.Metrics()
+			stats              = d.db.Metrics()
 			compTime           = d.compTime.Load()
 			writeDelayCount    = d.writeDelayCount.Load()
 			writeDelayTime     = d.writeDelayTime.Load()
@@ -472,14 +488,14 @@ func (d *Database) meter(refresh time.Duration) {
 		writeDelayCounts[i%2] = writeDelayCount
 		compTimes[i%2] = compTime
 
-		for _, levelMetrics := range metrics.Levels {
+		for _, levelMetrics := range stats.Levels {
 			nWrite += int64(levelMetrics.BytesCompacted)
 			nWrite += int64(levelMetrics.BytesFlushed)
 			compWrite += int64(levelMetrics.BytesCompacted)
 			compRead += int64(levelMetrics.BytesRead)
 		}
 
-		nWrite += int64(metrics.WAL.BytesWritten)
+		nWrite += int64(stats.WAL.BytesWritten)
 
 		compWrites[i%2] = compWrite
 		compReads[i%2] = compRead
@@ -501,7 +517,7 @@ func (d *Database) meter(refresh time.Duration) {
 			d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
 		}
 		if d.diskSizeGauge != nil {
-			d.diskSizeGauge.Update(int64(metrics.DiskSpaceUsage()))
+			d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
 		}
 		if d.diskReadMeter != nil {
 			d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
@@ -510,12 +526,20 @@ func (d *Database) meter(refresh time.Duration) {
 			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
 		}
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
-		manuallyAllocated := metrics.BlockCache.Size + int64(metrics.MemTable.Size) + int64(metrics.MemTable.ZombieSize)
+		manuallyAllocated := stats.BlockCache.Size + int64(stats.MemTable.Size) + int64(stats.MemTable.ZombieSize)
 		d.manualMemAllocGauge.Update(manuallyAllocated)
-		d.memCompGauge.Update(metrics.Flush.Count)
+		d.memCompGauge.Update(stats.Flush.Count)
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
-		d.seekCompGauge.Update(metrics.Compact.ReadCount)
+		d.seekCompGauge.Update(stats.Compact.ReadCount)
+
+		for i, level := range stats.Levels {
+			// Append metrics for additional layers
+			if i >= len(d.levelsGauge) {
+				d.levelsGauge = append(d.levelsGauge, metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
+			}
+			d.levelsGauge[i].Update(level.NumFiles)
+		}
 
 		// Sleep a bit, then repeat the stats collection
 		select {
@@ -563,7 +587,7 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
-	return b.b.Commit(pebble.Sync)
+	return b.b.Commit(b.db.writeOptions)
 }
 
 // Reset resets the batch for reuse.
@@ -595,9 +619,12 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
 // The purpose of this structure is to implement the missing APIs.
+//
+// The pebble iterator is not thread-safe.
 type pebbleIterator struct {
-	iter  *pebble.Iterator
-	moved bool
+	iter     *pebble.Iterator
+	moved    bool
+	released bool
 }
 
 // NewIterator creates a binary-alphabetical iterator over a subset
@@ -609,7 +636,7 @@ func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		UpperBound: upperBound(prefix),
 	})
 	iter.First()
-	return &pebbleIterator{iter: iter, moved: true}
+	return &pebbleIterator{iter: iter, moved: true, released: false}
 }
 
 // Next moves the iterator to the next key/value pair. It returns whether the
@@ -644,4 +671,9 @@ func (iter *pebbleIterator) Value() []byte {
 
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
-func (iter *pebbleIterator) Release() { iter.iter.Close() }
+func (iter *pebbleIterator) Release() {
+	if !iter.released {
+		iter.iter.Close()
+		iter.released = true
+	}
+}

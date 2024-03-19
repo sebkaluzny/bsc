@@ -83,15 +83,15 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 	var infos []freezerInfo
 	for _, freezer := range freezers {
 		switch freezer {
-		case chainFreezerName:
-			info, err := inspect(chainFreezerName, chainFreezerNoSnappy, db)
+		case ChainFreezerName:
+			info, err := inspect(ChainFreezerName, chainFreezerNoSnappy, db)
 			if err != nil {
 				return nil, err
 			}
 			infos = append(infos, info)
 
-		case stateFreezerName:
-			if ReadStateScheme(db) != PathScheme {
+		case StateFreezerName:
+			if ReadStateScheme(db) != PathScheme || db.StateStore() != nil {
 				continue
 			}
 			datadir, err := db.AncientDatadir()
@@ -104,7 +104,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			}
 			defer f.Close()
 
-			info, err := inspect(stateFreezerName, stateFreezerNoSnappy, f)
+			info, err := inspect(StateFreezerName, stateFreezerNoSnappy, f)
 			if err != nil {
 				return nil, err
 			}
@@ -127,8 +127,10 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 		tables map[string]bool
 	)
 	switch freezerName {
-	case chainFreezerName:
+	case ChainFreezerName:
 		path, tables = resolveChainFreezerDir(ancient), chainFreezerNoSnappy
+	case StateFreezerName:
+		path, tables = filepath.Join(ancient, freezerName), stateFreezerNoSnappy
 	default:
 		return fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 	}
@@ -149,7 +151,7 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 }
 
 func ResetStateFreezerTableOffset(ancient string, virtualTail uint64) error {
-	path, tables := filepath.Join(ancient, stateFreezerName), stateFreezerNoSnappy
+	path, tables := filepath.Join(ancient, StateFreezerName), stateFreezerNoSnappy
 
 	for name, disableSnappy := range tables {
 		log.Info("Handle table", "name", name, "disableSnappy", disableSnappy)

@@ -213,6 +213,18 @@ func (t *table) SetDiffStore(diff ethdb.KeyValueStore) {
 	panic("not implement")
 }
 
+func (t *table) StateStore() ethdb.Database {
+	return nil
+}
+
+func (t *table) SetStateStore(state ethdb.Database) {
+	panic("not implement")
+}
+
+func (t *table) StateStoreReader() ethdb.Reader {
+	return nil
+}
+
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
 func (t *table) NewBatchWithSize(size int) ethdb.Batch {
 	return &tableBatch{t.db.NewBatchWithSize(size), t.prefix}
@@ -237,7 +249,7 @@ func (b *tableBatch) Put(key, value []byte) error {
 	return b.batch.Put(append([]byte(b.prefix), key...), value)
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts a key removal into the batch for later committing.
 func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }

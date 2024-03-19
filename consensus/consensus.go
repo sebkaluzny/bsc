@@ -38,6 +38,9 @@ type ChainHeaderReader interface {
 	// Config retrieves the blockchain's chain configuration.
 	Config() *params.ChainConfig
 
+	// GenesisHeader retrieves the chain's genesis block header.
+	GenesisHeader() *types.Header
+
 	// CurrentHeader retrieves the current header from the local chain.
 	CurrentHeader() *types.Header
 
@@ -90,6 +93,9 @@ type Engine interface {
 	// VerifyUncles verifies that the given block's uncles conform to the consensus
 	// rules of a given engine.
 	VerifyUncles(chain ChainReader, block *types.Block) error
+
+	// NextInTurnValidator return the next in-turn validator for header
+	NextInTurnValidator(chain ChainHeaderReader, header *types.Header) (common.Address, error)
 
 	// Prepare initializes the consensus fields of a block header according to the
 	// rules of a particular engine. The changes are executed inline.
@@ -150,7 +156,7 @@ type PoSA interface {
 	IsSystemContract(to *common.Address) bool
 	EnoughDistance(chain ChainReader, header *types.Header) bool
 	IsLocalBlock(header *types.Header) bool
-	GetJustifiedNumberAndHash(chain ChainHeaderReader, header *types.Header) (uint64, common.Hash, error)
+	GetJustifiedNumberAndHash(chain ChainHeaderReader, headers []*types.Header) (uint64, common.Hash, error)
 	GetFinalizedHeader(chain ChainHeaderReader, header *types.Header) *types.Header
 	VerifyVote(chain ChainHeaderReader, vote *types.VoteEnvelope) error
 	IsActiveValidatorAt(chain ChainHeaderReader, header *types.Header, checkVoteKeyFn func(bLSPublicKey *types.BLSPublicKey) bool) bool

@@ -36,10 +36,11 @@ const (
 	LoggingCategory      = "LOGGING AND DEBUGGING"
 	MetricsCategory      = "METRICS AND STATS"
 	MiscCategory         = "MISC"
+	TestingCategory      = "TESTING"
 	DeprecatedCategory   = "ALIASED (deprecated)"
 	FastNodeCategory     = "FAST NODE"
 	FastFinalityCategory = "FAST FINALITY"
-	HistoryCategory      = "HISTORY"
+	BlockHistoryCategory = "BLOCK HISTORY MANAGEMENT"
 )
 
 func init() {

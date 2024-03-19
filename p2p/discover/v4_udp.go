@@ -151,7 +151,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	go tab.loop()
 
 	t.wg.Add(2)
-	go t.loop()
+	go t.loop(cfg.IsBootnode)
 	go t.readLoop(cfg.Unhandled)
 	return t, nil
 }
@@ -365,7 +365,7 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 		return nil, err
 	}
 	if respN.ID() != n.ID() {
-		return nil, fmt.Errorf("invalid ID in response record")
+		return nil, errors.New("invalid ID in response record")
 	}
 	if respN.Seq() < n.Seq() {
 		return n, nil // response record is older
@@ -405,7 +405,7 @@ func (t *UDPv4) handleReply(from enode.ID, fromIP net.IP, req v4wire.Packet) boo
 
 // loop runs in its own goroutine. it keeps track of
 // the refresh timer and the pending reply queue.
-func (t *UDPv4) loop() {
+func (t *UDPv4) loop(isBootNode bool) {
 	defer t.wg.Done()
 
 	var (
@@ -442,7 +442,9 @@ func (t *UDPv4) loop() {
 	}
 
 	logStatistic := func() {
-		t.log.Info("Current status", "table_size", t.tab.len(), "pending_size", plist.Len(), "db_size", t.db.Size())
+		if isBootNode {
+			t.log.Info("Discovery status", "table_size", t.tab.len(), "pending_size", plist.Len(), "db_size", t.db.Size())
+		}
 	}
 
 	for {
