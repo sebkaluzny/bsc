@@ -183,9 +183,13 @@ type StdTraceConfig struct {
 
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
-	TxHash common.Hash `json:"txHash"`           // transaction hash
-	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
-	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+	TxHash   common.Hash `json:"txHash"`           // transaction hash
+	Result   interface{} `json:"result,omitempty"` // Trace results produced by the tracer
+	Error    string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+	Nonce    uint64      `json:"nonce,omitempty"`
+	Cost     *big.Int    `json:"cost,omitempty"`
+	GasPrice *big.Int    `json:"gasPrice,omitempty"`
+	TxIndex  int         `json:"txIndex,omitempty"`
 }
 
 // blockTraceTask represents a single block trace task when an entire chain is
@@ -707,7 +711,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		if err != nil {
 			return nil, err
 		}
-		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
+		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res, Nonce: tx.Nonce(), Cost: tx.Cost(), GasPrice: tx.GasPrice(), TxIndex: i}
 	}
 	return results, nil
 }

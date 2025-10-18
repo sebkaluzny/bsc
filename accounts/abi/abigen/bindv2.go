@@ -159,6 +159,10 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 		return err
 	}
 	normalized.Name = normalizedName
+	var inputStructName string
+	if len(original.Inputs) > 0 {
+		inputStructName = normalizedName + "Inputs"
+	}
 
 	normalized.Inputs = normalizeArgs(original.Inputs)
 	for _, input := range normalized.Inputs {
@@ -179,9 +183,10 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 		isStructured = true
 	}
 	cb.calls[original.Name] = &tmplMethod{
-		Original:   original,
-		Normalized: normalized,
-		Structured: isStructured,
+		Original:        original,
+		Normalized:      normalized,
+		Structured:      isStructured,
+		InputStructName: inputStructName,
 	}
 	return nil
 }

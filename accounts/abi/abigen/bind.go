@@ -165,11 +165,17 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 					bindStructType(output.Type, structs)
 				}
 			}
+
+			var inputStructName string
+			if len(original.Inputs) > 0 {
+				inputStructName = normalizedName + "Inputs"
+			}
+
 			// Append the methods to the call or transact lists
 			if original.IsConstant() {
-				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
+				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs), InputStructName: inputStructName}
 			} else {
-				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
+				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs), InputStructName: inputStructName}
 			}
 		}
 		for _, original := range evmABI.Events {

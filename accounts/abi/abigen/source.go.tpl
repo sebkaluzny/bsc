@@ -1,9 +1,10 @@
 // Code generated - DO NOT EDIT.
-// This file is a generated binding and any manual changes will be lost.
+// This file is a generated binding and any manual changes will be lost
 
 package {{.Package}}
 
 import (
+	"bytes"
 	"math/big"
 	"strings"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -38,7 +40,7 @@ var (
 	}
 {{end}}
 
-{{range $contract := .Contracts}}
+{{range $cname, $contract := .Contracts}}
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
 		ABI: "{{.InputABI}}",
@@ -61,6 +63,140 @@ var (
 		// {{.Type}}FuncSigs maps the 4-byte function signature to its string representation.
 		var {{.Type}}FuncSigs = {{.Type}}MetaData.Sigs
 	{{end}}
+
+
+    {{/* For each call/transact method, create an Inputs struct */}}
+    {{range $mname, $method := $contract.Calls}}
+        // {{.Normalized.Name}}Inputs holds the ABI inputs of method {{.Original.String}}.
+        type {{.Normalized.Name}}Input struct { {{range .Normalized.Inputs}}
+            {{capitalise .Name}} {{bindtype .Type $structs}} {{end}}
+        }
+    {{end}}
+
+    {{range $mname, $method := $contract.Transacts}}
+        // {{.Normalized.Name}}Inputs holds the ABI inputs of method {{.Original.String}}.
+        type {{.Normalized.Name}}Input struct { {{range .Normalized.Inputs}}
+            {{capitalise .Name}} {{bindtype .Type $structs}} {{end}}
+        }
+    {{end}}
+
+	// ParseTxInput checks a method selector in the given calldata and
+    // returns the decoded inputs struct and the method name.
+    func ParseTxInput(data []byte) (any, string, error) {
+    	if len(data) < 4 {
+    		return nil, "", errors.New("calldata too short")
+    	}
+    	sel := data[:4]
+
+    	abiDef, err := {{$contract.Type}}MetaData.GetAbi()
+    	if err != nil {
+    		return nil, "", err
+    	}
+
+    	switch {
+    	{{/* View/Pure functions (we parse these too in case user feeds us their calldata) */}}
+    	{{range $mname, $method := $contract.Calls}}
+    	case bytes.Equal(sel, abiDef.Methods["{{$method.Original.Name}}"].ID):
+    		{{ if gt (len $method.Normalized.Inputs) 0 -}}
+    		vals, err := abiDef.Methods["{{$method.Original.Name}}"].Inputs.Unpack(data[4:])
+    		if err != nil {
+    			return nil, "{{$method.Original.Name}}", err
+    		}
+    		in := new({{$method.Normalized.Name}}Input)
+    		{{- range $i, $a := $method.Normalized.Inputs }}
+    		in.{{ capitalise $a.Name }} = *abi.ConvertType(vals[{{$i}}], new({{ bindtype $a.Type $structs }})).(*{{ bindtype $a.Type $structs }})
+    		{{- end }}
+    		return *in, "{{$method.Original.Name}}", nil
+    		{{- else -}}
+    		// No inputs for this method
+    		return {{$method.Normalized.Name}}Input{}, "{{$method.Original.Name}}", nil
+    		{{- end }}
+    	{{end}}
+
+    	{{/* Nonpayable/Payable functions */}}
+    	{{range $mname, $method := $contract.Transacts}}
+    	case bytes.Equal(sel, abiDef.Methods["{{$method.Original.Name}}"].ID):
+    		{{ if gt (len $method.Normalized.Inputs) 0 -}}
+    		vals, err := abiDef.Methods["{{$method.Original.Name}}"].Inputs.Unpack(data[4:])
+    		if err != nil {
+    			return nil, "{{$method.Original.Name}}", err
+    		}
+    		in := new({{$method.Normalized.Name}}Input)
+    		{{- range $i, $a := $method.Normalized.Inputs }}
+    		in.{{ capitalise $a.Name }} = *abi.ConvertType(vals[{{$i}}], new({{ bindtype $a.Type $structs }})).(*{{ bindtype $a.Type $structs }})
+    		{{- end }}
+    		return *in, "{{$method.Original.Name}}", nil
+    		{{- else -}}
+    		// No inputs for this method
+    		return {{$method.Normalized.Name}}Input{}, "{{$method.Original.Name}}", nil
+    		{{- end }}
+    	{{end}}
+
+    	default:
+    		return nil, "", errors.New("unknown method selector")
+    	}
+    }
+
+    // ParseEvent parses a log's data + topics into the concrete event struct.
+    // It returns the decoded event (as `any`) and the event name.
+    func ParseEvent(data hexutil.Bytes, topics []common.Hash) (any, string, error) {
+    	if len(topics) == 0 {
+    		return nil, "", errors.New("no topics provided")
+    	}
+
+    	abiDef, err := {{$contract.Type}}MetaData.GetAbi()
+    	if err != nil {
+    		return nil, "", err
+    	}
+
+    	// Fast path: non-anonymous events are identified by topic[0] == keccak256(EventSignature)
+    	switch topics[0] {
+    	{{range $ename, $event := $contract.Events}}
+    	{{- if not $event.Original.Anonymous }}
+    	case abiDef.Events["{{$event.Normalized.Name}}"].ID:
+    		{
+    			out := new({{$contract.Type}}{{$event.Normalized.Name}})
+    			// Unpack non-indexed args from data
+    			if err := abiDef.UnpackIntoInterface(out, "{{$event.Normalized.Name}}", data); err != nil {
+    				return nil, "{{$event.Normalized.Name}}", err
+    			}
+                var indexed abi.Arguments
+                for _, arg := range abiDef.Events["{{$event.Normalized.Name}}"].Inputs {
+                    if arg.Indexed {
+                        indexed = append(indexed, arg)
+                    }
+                }
+    			if err := abi.ParseTopics(out, indexed, topics[1:]); err != nil {
+    				return nil, "{{$event.Normalized.Name}}", err
+    			}
+    			return *out, "{{$event.Normalized.Name}}", nil
+    		}
+    	{{- end}}
+    	{{end}}
+    	}
+
+    	// Slow path: anonymous events (no topic[0] signature). Try each anonymous event.
+    	{{- $hasAnon := false -}}
+    	{{- range $ename, $event := $contract.Events -}}
+    	{{- if $event.Original.Anonymous -}}
+    	{{- $hasAnon = true -}}
+    	{
+    		out := new({{$contract.Type}}{{$event.Normalized.Name}})
+    		// Attempt decode: non-indexed from data, indexed from topics
+    		if err := abiDef.UnpackIntoInterface(out, "{{$event.Normalized.Name}}", data); err == nil {
+    			if err2 := abi.ParseTopics(out, abiDef.Events["{{$event.Normalized.Name}}"].Inputs, topics); err2 == nil {
+    				return *out, "{{$event.Normalized.Name}}", nil
+    			}
+    		}
+    	}
+    	{{- end -}}
+    	{{- end -}}
+    	{{- if not $hasAnon }}
+    	// No anonymous events in this ABI, fall through.
+    	{{- end }}
+
+    	return nil, "", errors.New("unknown event signature")
+    }
 
 	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.

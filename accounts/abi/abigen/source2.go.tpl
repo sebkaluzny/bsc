@@ -33,6 +33,41 @@ var (
 	}
 {{end}}
 
+{{/* Generate input structs for all contract methods */}}
+{{range $contract := .Contracts}}
+	{{range .Calls}}
+		{{if .HasInputs}}
+			// {{.InputStructName}} is an auto-generated Go binding around the inputs for the {{.Original.Name}} method.
+			type {{.InputStructName}} struct {
+				{{range .Normalized.Inputs}}{{capitalise .Name}} {{bindtype .Type $structs}}
+				{{end}}
+			}
+		{{end}}
+	{{end}}
+{{end}}
+
+func ParseTxInput(data []byte) (interface{}, error) {
+    if len(data) < 4 {
+        return nil, errors.New("input data too short")
+    }
+    methodID := string(data[:4])
+    switch methodID {
+    {{range .Calls}}
+        {{if .HasInputs}}
+        // {{.Original.Name}}
+        case string(common.Hex2Bytes("{{printf "%x" .Original.ID}}")):
+            var inputs {{.InputStructName}}
+            if err := _{{.Type}}.abi.UnpackIntoInterface(&inputs, "{{.Original.Name}}", data[4:]); err != nil {
+                return nil, err
+            }
+            return inputs, nil
+        {{end}}
+    {{end}}
+    default:
+        return nil, errors.New("unknown method")
+    }
+}
+
 {{range $contract := .Contracts}}
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = bind.MetaData{
@@ -73,6 +108,31 @@ var (
 	func (c *{{.Type}}) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
 		 return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 	}
+
+	{{/* Generate the ParseTxInput method */}}
+	// ParseTxInput is a generic input data parser for the contract's methods.
+	func (_{{.Type}} *{{.Type}}) ParseTxInput(data []byte) (interface{}, error) {
+		if len(data) < 4 {
+			return nil, errors.New("input data too short")
+		}
+		methodID := string(data[:4])
+		switch methodID {
+		{{range .Calls}}
+			{{if .HasInputs}}
+			// {{.Original.Name}}
+			case string(common.Hex2Bytes("{{printf "%x" .Original.ID}}")):
+				var inputs {{.InputStructName}}
+				if err := _{{.Type}}.abi.UnpackIntoInterface(&inputs, "{{.Original.Name}}", data[4:]); err != nil {
+					return nil, err
+				}
+				return inputs, nil
+			{{end}}
+		{{end}}
+		default:
+			return nil, errors.New("unknown method")
+		}
+	}
+
 
 	{{ if .Constructor.Inputs }}
 	// PackConstructor is the Go binding used to pack the parameters required for

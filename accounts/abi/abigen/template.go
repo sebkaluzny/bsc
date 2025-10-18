@@ -89,9 +89,10 @@ type tmplDataV2 struct {
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
 // and cached data fields.
 type tmplMethod struct {
-	Original   abi.Method // Original method as parsed by the abi package
-	Normalized abi.Method // Normalized version of the parsed method (capitalized names, non-anonymous args/returns)
-	Structured bool       // Whether the returns should be accumulated into a struct
+	Original        abi.Method // Original method as parsed by the abi package
+	Normalized      abi.Method // Normalized version of the parsed method (capitalized names, non-anonymous args/returns)
+	Structured      bool       // Whether the returns should be accumulated into a struct
+	InputStructName string
 }
 
 // tmplEvent is a wrapper around an abi.Event that contains a few preprocessed
@@ -121,6 +122,10 @@ type tmplField struct {
 type tmplStruct struct {
 	Name   string       // Auto-generated struct name(before solidity v0.5.11) or raw name.
 	Fields []*tmplField // Struct fields definition depends on the binding language.
+}
+
+func (m *tmplMethod) HasInputs() bool {
+	return len(m.Original.Inputs) > 0
 }
 
 // tmplSource is the Go source template that the generated Go contract binding
